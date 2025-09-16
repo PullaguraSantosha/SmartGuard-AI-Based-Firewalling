@@ -1,45 +1,3 @@
-import time
-import threading
-from collections import defaultdict, deque
-from scapy.all import sniff, IP, ICMP, TCP, UDP
-
-# ------------------- CONFIGURATION --------------------
-WINDOW_SIZE = 5  # seconds for stats print interval
-
-# ---- ICMP Thresholds ----
-ICMP_RATE_THRESHOLD = 1000          # packets/sec
-ICMP_SPOOFED_SRC_THRESHOLD = 150    # unique source IPs
-ICMP_LARGE_PAYLOAD_THRESHOLD = 1400 # bytes
-
-# ---- TCP SYN Thresholds ----
-TCP_SYN_PPS_THRESHOLD = 1000
-TCP_UNIQUE_SPORT_THRESHOLD = 500
-TCP_AVG_PKT_SIZE_THRESHOLD = 100
-
-# ---- UDP Thresholds ----
-UDP_RATE_THRESHOLD = 200
-UDP_LARGE_PAYLOAD_THRESHOLD = 1000
-UDP_PORT_VARIATION_THRESHOLD = 50
-
-# ------------------- ICMP STATE ------------------------
-icmp_packet_times = deque()
-icmp_src_ip_count = defaultdict(int)
-icmp_large_payload_count = 0
-icmp_lock = threading.Lock()
-icmp_payload_counter = defaultdict(int)
-
-# ------------------- TCP SYN STATE ---------------------
-tcp_syn_packet_times = deque()
-tcp_source_ports = defaultdict(set)  # key: timestamp, value: set of source ports
-tcp_packet_sizes = []
-tcp_lock = threading.Lock()
-
-# ------------------- UDP STATE -------------------------
-udp_packet_times = deque()
-udp_dst_port_counter = defaultdict(int)
-udp_large_payload_count = 0
-udp_lock = threading.Lock()
-
 # ------------------- ICMP HANDLER ----------------------
 def detect_icmp(pkt):
     global icmp_large_payload_count
@@ -119,27 +77,7 @@ def print_combined_stats():
         icmp_flood_large_payload_variant = int(icmp_lpayload_count > 10)
         icmp_flood_spoofed_ips_variant = int(icmp_spoofed_ips > ICMP_SPOOFED_SRC_THRESHOLD)
 
-        # --- TCP Analysis ---
-        with tcp_lock:
-            while tcp_syn_packet_times and tcp_syn_packet_times[0] < now - WINDOW_SIZE:
-                tcp_syn_packet_times.popleft()
-
-            tcp_current_syns = len(tcp_syn_packet_times)
-            tcp_syn_pps = tcp_current_syns / WINDOW_SIZE
-
-            active_ports = set()
-            expired_keys = []
-            for t, ports in tcp_source_ports.items():
-                if t < now - WINDOW_SIZE:
-                    expired_keys.append(t)
-                else:
-                    active_ports |= ports
-            for k in expired_keys:
-                del tcp_source_ports[k]
-            tcp_unique_sports = len(active_ports)
-
-            tcp_avg_pkt_size = (sum(tcp_packet_sizes) / len(tcp_packet_sizes)) if tcp_packet_sizes else 0
-            tcp_packet_sizes.clear()
+        # --- TCP Analysis -----
 
         # --- UDP Analysis ---
         with udp_lock:
@@ -215,15 +153,3 @@ def print_combined_stats():
 
         print("="*60 + "\n")
 
-# ------------------- MAIN -------------------------
-if __name__ == "__main__":
-    iface = "eth0"  # Change this to your network interface
-
-    print(f"\n🚦 Monitoring ICMP, TCP, UDP packets on interface '{iface}'")
-    print(f"🕒 Combined traffic summary every {WINDOW_SIZE} seconds.\n")
-
-    # Start combined stats printing thread
-    threading.Thread(target=print_combined_stats, daemon=True).start()
-
-    # Start sniffing packets
-    sniff(iface=iface, prn=master_packet_handler, store=0)
