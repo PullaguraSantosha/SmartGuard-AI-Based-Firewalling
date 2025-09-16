@@ -679,28 +679,6 @@ def load_syn_models():
     print("📁 Loading SYN ML models...")
     
     try:
-        if os.path.exists(SYN_MODEL_PATH) and os.path.exists(SYN_SCALER_PATH):
-            syn_ml_model = joblib.load(SYN_MODEL_PATH)
-            syn_ml_scaler = joblib.load(SYN_SCALER_PATH)
-            
-            # Load backup model if available
-            if os.path.exists(SYN_BACKUP_MODEL_PATH):
-                syn_backup_model = joblib.load(SYN_BACKUP_MODEL_PATH)
-            else:
-                syn_backup_model = syn_ml_model
-                
-            syn_ml_enabled = True
-            print("✅ SYN ML models loaded successfully")
-            
-            # Load SYN confidence normalizer
-            if os.path.exists(SYN_CONFIDENCE_NORMALIZER_PATH):
-                syn_confidence_normalizer = joblib.load(SYN_CONFIDENCE_NORMALIZER_PATH)
-                syn_normalizer_enabled = True
-                print("✅ SYN confidence normalizer loaded successfully")
-            else:
-                print("❌ SYN confidence normalizer not found")
-                syn_normalizer_enabled = False
-        else:
             print("❌ SYN ML model files not found")
             syn_ml_enabled = False
             syn_normalizer_enabled = False
@@ -762,58 +740,6 @@ def calculate_udp_adaptive_weight_multiplier(pps_triggered, ports_triggered, pay
     else:
         return 1.0
 
-def udp_extract_ml_features(pps, unique_ports, large_payload_count, unique_src_ips, pps_triggered, ports_triggered, payload_triggered):
-    """Extract features for UDP ML prediction with adaptive weighting"""
-    with udp_lock:
-        # Calculate adaptive weight multiplier for PPS
-        pps_weight_multiplier = calculate_udp_adaptive_weight_multiplier(pps_triggered, ports_triggered, payload_triggered)
-        
-        # Apply adaptive weight multiplier to PPS feature
-        packet_rate = max(0, pps * pps_weight_multiplier)
-        
-        # Enhanced port diversity with higher weight for randomization attacks
-        if ports_triggered:
-            port_diversity = max(0, unique_ports * PORT_WEIGHT_MULTIPLIER)
-        else:
-            port_diversity = max(0, unique_ports)
-        
-        payload_anomaly = max(0, large_payload_count)
-        
-        # Create feature array
-        features = [packet_rate, port_diversity, payload_anomaly]
-        features = [0.0 if np.isnan(f) or np.isinf(f) else f for f in features]
-        return np.array(features), pps_weight_multiplier
-
-def calculate_udp_adaptive_confidence_boost(udp_pps, unique_ports, pps_triggered, ports_triggered, payload_triggered):
-    """Calculate adaptive confidence boost for UDP"""
-    triggered_features = sum([pps_triggered, ports_triggered, payload_triggered])
-    total_boost = 0
-    
-    # PPS boost
-    if udp_pps > UDP_RATE_THRESHOLD:
-        pps_ratio = udp_pps / UDP_RATE_THRESHOLD
-        pps_boost = min(PPS_CONFIDENCE_BOOST, PPS_CONFIDENCE_BOOST * (pps_ratio / 2))
-        
-        if triggered_features == 1 and pps_triggered:
-            total_boost += pps_boost
-        elif triggered_features == 2:
-            total_boost += pps_boost * (1 - MULTI_FEATURE_REDUCTION)
-        elif triggered_features == 3:
-            total_boost += pps_boost * (1 - MULTI_FEATURE_REDUCTION - THREE_FEATURE_REDUCTION)
-    
-    # Enhanced port randomization boost
-    if unique_ports > UDP_PORT_VARIATION_THRESHOLD:
-        port_ratio = unique_ports / UDP_PORT_VARIATION_THRESHOLD
-        port_boost = min(PORT_CONFIDENCE_BOOST, PORT_CONFIDENCE_BOOST * (port_ratio / 2))
-        
-        if triggered_features == 1 and ports_triggered:
-            total_boost += port_boost * 1.5  # Extra boost for port-only attacks
-        elif triggered_features == 2:
-            total_boost += port_boost * (1 - MULTI_FEATURE_REDUCTION)
-        elif triggered_features == 3:
-            total_boost += port_boost * (1 - MULTI_FEATURE_REDUCTION - THREE_FEATURE_REDUCTION)
-    
-    return total_boost
 
 def udp_ml_predict(features, udp_pps, unique_ports, pps_triggered, ports_triggered, payload_triggered):
     """Make UDP ML prediction with adaptive confidence scoring"""
@@ -892,17 +818,6 @@ def calculate_adaptive_weight_multiplier(pps_triggered, ips_triggered, payload_t
     else:
         return 1.0
 
-def icmp_extract_features(icmp_pps, unique_ips, large_payload_count, pps_triggered, ips_triggered, payload_triggered):
-    """Extract features for ICMP ML"""
-    with icmp_lock:
-        weight_multiplier = calculate_adaptive_weight_multiplier(pps_triggered, ips_triggered, payload_triggered)
-        icmp_rate = max(0, icmp_pps * weight_multiplier)
-        ip_diversity = max(0, unique_ips)
-        large_payloads = max(0, large_payload_count)
-        
-        features = [icmp_rate, ip_diversity, large_payloads]
-        features = [0.0 if np.isnan(f) or np.isinf(f) else max(0.0, f) for f in features]
-        return np.array(features), weight_multiplier
 
 def calculate_adaptive_confidence_boost(icmp_pps, pps_triggered, ips_triggered, payload_triggered):
     """Calculate adaptive confidence boost for ICMP"""
@@ -986,17 +901,6 @@ def detect_syn(pkt):
                 syn_source_ports.popleft()
             if len(syn_dest_ports) > 1000:
                 syn_dest_ports.popleft()
-
-def syn_extract_features(syn_pps, unique_sports, avg_pkt_size):
-    """Extract features for SYN ML"""
-    with syn_lock:
-        syn_rate = max(0, syn_pps)
-        port_diversity = max(0, unique_sports)
-        packet_size_avg = max(0, avg_pkt_size)
-        
-        features = [syn_rate, port_diversity, packet_size_avg]
-        features = [0.0 if np.isnan(f) or np.isinf(f) else max(0.0, f) for f in features]
-        return np.array(features)
 
 def syn_normalize_confidence(original_confidence):
     """Normalize SYN confidence using trained model"""
